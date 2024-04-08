@@ -27,18 +27,49 @@ namespace ini_utilty {
             }
         }
     }
-    enum class data_type : char { data_none, data_comment, data_session, data_key, data_value, data_unknown };
+    enum class data_type : char
+    {
+        data_empty,
+        data_comment,
+        data_session,
+        data_keyvalue,
+        data_unknown
+    };
     using data_item = std::pair< std::string, std::string >;
     inline data_type parse_line( const std::string& line, data_item& item ) {
         item.first.clear();
         item.second.clear();
         trim( const_cast< std::string& >( line ) );
         if ( line.empty() ) {
-            return data_type::data_none;
+            return data_type::data_empty;
         }
+        // parse comment
         if ( line[ 0 ] == ';' ) {
             return data_type::data_comment;
         }
+        // parse session
+        if ( line[ 0 ] == '[' ) {
+            std::size_t pos = line.find( ']' );
+
+            item.first = const_cast< std::string& >( line ).substr( 1, pos );
+            trim( item.first );
+            return data_type::data_session;
+        }
+        // parse key=value
+        auto trim_line = const_cast< std::string& >( line );
+
+        std::size_t pos = line.find( ';' );
+        if ( pos != std::string::npos ) {
+            trim_line = trim_line.substr( 0, pos );
+        }
+        pos = trim_line.find( '=' );
+        if ( pos != std::string::npos ) {
+            trim( trim_line );
+            item.first  = trim_line.substr( 0, pos );
+            item.second = trim_line.substr( pos + 1 );
+            return data_type::data_keyvalue;
+        }
+        return data_type::data_unknown;
     }
 }  // namespace ini_utilty
 template < typename T >
