@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <exception>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -140,5 +141,27 @@ public:
 private:
     data_index_map data_index_map_;
     data_continaer data_continaer_;
+};
+class noncopyable {
+public:
+    noncopyable()                                = default;
+    noncopyable( const noncopyable& )            = delete;
+    noncopyable& operator=( const noncopyable& ) = delete;
+};
+class ini_file : public noncopyable {
+public:
+    using data_type   = ini_map< ini_map< std::string > >;
+    using session_set = std::vector< std::string >;
+
+public:
+    explicit ini_file( const std::string& path ) noexcept : ifs_( path ) {}
+    ~ini_file() {
+        ifs_.close();
+    }
+
+private:
+    data_type     data_{};
+    session_set   sesions_{};
+    std::ifstream ifs_;
 };
 }  // namespace jz
