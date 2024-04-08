@@ -28,14 +28,7 @@ namespace ini_utilty {
             }
         }
     }
-    enum class data_type : char
-    {
-        data_empty,
-        data_comment,
-        data_session,
-        data_keyvalue,
-        data_unknown
-    };
+    enum class data_type : char { data_empty, data_comment, data_session, data_keyvalue, data_unknown };
     using data_item = std::pair< std::string, std::string >;
     inline data_type parse_line( const std::string& line, data_item& item ) {
         item.first.clear();
@@ -106,8 +99,19 @@ public:
     bool size() const {
         return data_continaer_.size();
     }
-    T& operator[]( std::size_t offset ) const {
-        // todo;
+    std::size_t set_empty( const std::string& key ) {
+        std::size_t index      = data_continaer_.size();
+        data_index_map_[ key ] = index;
+        data_continaer_.emplace_back( key, T() );
+        return index;
+    }
+    T& operator[]( const std::string& key ) {
+        ini_utilty::trim( const_cast< std::string& >( key ) );
+        ini_utilty::tolower( const_cast< std::string& >( key ) );
+        auto it = data_index_map_.find( key );
+
+        std::size_t index = it == data_index_map_.end() ? set_empty( key ) : it->second;
+        return data_continaer_[ index ].second;
     }
     void clear() {
         data_index_map_.clear();
@@ -148,20 +152,88 @@ public:
     noncopyable( const noncopyable& )            = delete;
     noncopyable& operator=( const noncopyable& ) = delete;
 };
+
+using ini_structure = ini_map< ini_map< std::string > >;
 class ini_file : public noncopyable {
 public:
     using data_type   = ini_map< ini_map< std::string > >;
     using session_set = std::vector< std::string >;
+    using line_data   = std::vector< std::string >;
+    using line_item   = std::pair< std::string, std::string >;
 
 public:
-    explicit ini_file( const std::string& path ) noexcept : ifs_( path ) {}
-    ~ini_file() {
+    explicit ini_file( const std::string& path ) : ifs_( path ) {
+        if ( !ifs_.is_open() ) {
+            throw std::logic_error( "open file failed" );
+        }
+        parse_line_data( read_file() );
+    }
+
+    ~ini_file() {}
+
+private:
+    line_data read_file() {
+        ifs_.seekg( 0, std::ios::end );
+        auto file_size = static_cast< std::size_t >( ifs_.tellg() );
+        ifs_.seekg( 0, std::ios::beg );
+        if ( file_size >= 3 ) {
+            const char header[ 3 ] = { static_cast< char >( ifs_.get() ), static_cast< char >( ifs_.get() ), static_cast< char >( ifs_.get() ) };
+
+            is_bom_ = ( header[ 0 ] == static_cast< char >( 0xEF ) && header[ 1 ] == static_cast< char >( 0xBB ) && header[ 2 ] == static_cast< char >( 0xBF ) );
+        }
+        std::string buffer( file_size, ' ' );
+        ifs_.seekg( is_bom_ ? 3 : 0, std::ios::beg );
+        ifs_.read( &buffer[ 0 ], file_size );
         ifs_.close();
+        line_data ret;
+        if ( buffer.empty() ) {
+            return ret;
+        }
+        std::string line;
+        for ( auto ch : buffer ) {
+            if ( ch == '\n' ) {
+                ret.emplace_back( line );
+                line.clear();
+                continue;
+            }
+            if ( ch != '\0' && ch != '\r' ) {
+                line += ch;
+            }
+        }
+        ret.emplace_back( line );
+        return ret;
+    }
+    void parse_line_data( const line_data& data ) {
+        if ( data.empty() ) {
+            return;
+        }
+        line_item   item;
+        std::string session;
+
+        bool has_session = false;
+        for ( auto& line : data ) {
+            auto parse_ret = ini_utilty::parse_line( line, item );
+            if ( parse_ret == ini_utilty::data_type::data_session ) {
+                has_session = true;
+                session     = item.first;
+
+                data_[ session ];
+                sesions_.emplace_back( session );
+            }
+            else if ( has_session && parse_ret == ini_utilty::data_type::data_keyvalue ) {
+                auto key   = item.first;
+                auto value = item.second;
+
+                data_[ session ][ key ] = value;
+            }
+        }
     }
 
 private:
     data_type     data_{};
     session_set   sesions_{};
     std::ifstream ifs_;
+
+    bool is_bom_{ false };
 };
 }  // namespace jz
