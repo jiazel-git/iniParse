@@ -14,7 +14,7 @@ namespace ini_utilty {
 
     inline void trim( std::string& str ) {
         str.erase( str.find_last_not_of( white_space_delimiters ) + 1 );
-        str.erase( 0, str.find_first_of( white_space_delimiters ) );
+        str.erase( 0, str.find_first_not_of( white_space_delimiters ) );
     }
     inline void tolower( std::string& str ) {
         std::transform( str.begin(), str.end(), str.begin(), []( const char ch ) { return static_cast< char >( std::tolower( ch ) ); } );
@@ -52,7 +52,7 @@ namespace ini_utilty {
         if ( line[ 0 ] == '[' ) {
             std::size_t pos = line.find( ']' );
 
-            item.first = const_cast< std::string& >( line ).substr( 1, pos );
+            item.first = const_cast< std::string& >( line ).substr( 1, pos - 1 );
             trim( item.first );
             return data_type::data_session;
         }
@@ -84,8 +84,8 @@ public:
 
 public:
     ini_map()                            = default;
-    ini_map( const ini_map& )            = delete;
-    ini_map& operator=( const ini_map& ) = delete;
+    ini_map( const ini_map& )            = default;
+    ini_map& operator=( const ini_map& ) = default;
 
 public:
     iterator begin() {
@@ -106,8 +106,16 @@ public:
     bool size() const {
         return data_continaer_.size();
     }
-    T& operator[]( std::size_t offset ) const {
-        // todo;
+    std::size_t set_empty( const std::string& key ) {
+        std::size_t index      = data_continaer_.size();
+        data_index_map_[ key ] = index;
+        data_continaer_.emplace_back( key, T() );
+        return index;
+    }
+    T& operator[]( const std::string& key ) {
+        auto        it    = data_index_map_.find( key );
+        std::size_t index = it == data_index_map_.end() ? set_empty( key ) : it->second;
+        return data_continaer_[ index ].second;
     }
     void clear() {
         data_index_map_.clear();
@@ -142,6 +150,83 @@ private:
     data_index_map data_index_map_;
     data_continaer data_continaer_;
 };
+using ini_structure = ini_map< ini_map< std::string > >;
+class ini_reader {
+public:
+    using ini_buffer = std::vector< std::string >;
+    using line_item  = std::pair< std::string, std::string >;
+
+public:
+    explicit ini_reader( const std::string& file_name ) : ifs_( file_name, std::ios::in ), is_bom_( false ) {}
+    ini_reader& operator>>( ini_structure& ini ) {
+        ini_buffer  buffer = read_file_();
+        line_item   item;
+        bool        in_session;
+        std::string session;
+        for ( auto& line : buffer ) {
+            if ( ini_utilty::parse_line( line, item ) == ini_utilty::data_type::data_session ) {
+                in_session = true;
+                ini[ session = item.first ];
+                std::cout << item.first << " " << item.second << std::endl;
+                continue;
+            }
+            if ( in_session && ini_utilty::parse_line( line, item ) == ini_utilty::data_type::data_keyvalue ) {
+                auto key              = item.first;
+                auto value            = item.second;
+                ini[ session ][ key ] = value;
+                std::cout << item.first << " " << item.second << std::endl;
+                continue;
+            }
+        }
+        return *this;
+    }
+    ~ini_reader() {
+        if ( ifs_.is_open() ) {
+            ifs_.close();
+        }
+    }
+
+private:
+    ini_buffer read_file_() {
+        if ( !ifs_.is_open() ) {
+            return ini_buffer{};
+        }
+        ifs_.seekg( 0, std::ios::end );
+        auto file_size = static_cast< std::size_t >( ifs_.tellg() );
+        ifs_.seekg( 0, std::ios::beg );
+        if ( file_size >= 3 ) {
+            const char header[ 3 ] = {
+                static_cast< char >( ifs_.get() ),
+                static_cast< char >( ifs_.get() ),
+                static_cast< char >( ifs_.get() ),
+            };
+            is_bom_ = ( header[ 0 ] == static_cast< char >( 0xEF ) && header[ 1 ] == static_cast< char >( 0xBB ) && header[ 2 ] == static_cast< char >( 0xBF ) );
+        }
+        ifs_.seekg( is_bom_ ? 3 : 0, std::ios::beg );
+        std::string file_contents( file_size, ' ' );
+        ifs_.read( &file_contents[ 0 ], file_size );
+        ini_buffer  buffer;
+        std::string tmp;
+        for ( auto ch : file_contents ) {
+            if ( ch == '\n' ) {
+                buffer.emplace_back( tmp );
+                tmp.clear();
+                continue;
+            }
+            if ( ch != '\0' && ch != '\r' ) {
+                tmp += ch;
+                continue;
+            }
+        }
+        buffer.emplace_back( tmp );
+        return buffer;
+    }
+
+private:
+    std::ifstream ifs_;
+
+    bool is_bom_;
+};
 class noncopyable {
 public:
     noncopyable()                                = default;
@@ -150,18 +235,14 @@ public:
 };
 class ini_file : public noncopyable {
 public:
-    using data_type   = ini_map< ini_map< std::string > >;
-    using session_set = std::vector< std::string >;
-
 public:
-    explicit ini_file( const std::string& path ) noexcept : ifs_( path ) {}
-    ~ini_file() {
-        ifs_.close();
+    explicit ini_file( const std::string& file ) : file_( file ) {}
+    void read( ini_structure& ini ) {
+        ini_reader reader( file_ );
+        reader >> ini;
     }
 
 private:
-    data_type     data_{};
-    session_set   sesions_{};
-    std::ifstream ifs_;
+    std::string file_;
 };
 }  // namespace jz

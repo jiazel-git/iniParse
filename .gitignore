@@ -33,4 +33,6 @@
 
 # Cmake
 build
+
 .cache
+.vscode
