@@ -82,6 +82,7 @@ ColumnLimit:	200
 CommentPragmas:	'^ IWYU pragma:'
 # 构造函数的初始化列表要么都在同一行，要么都各自一行
 ConstructorInitializerAllOnOneLineOrOnePerLine :	false
+BreakConstructorInitializers : AfterColon
 # 构造函数的初始化列表的缩进宽度
 ConstructorInitializerIndentWidth:	4
 # 延续的行的缩进宽度
@@ -171,4 +172,5 @@ Standard:	Cpp11
 TabWidth:	4
 # 使用tab字符: Never, ForIndentation, ForContinuationAndIndentation, Always
 UseTab:	Never
+AllowShortLambdasOnASingleLine: None  
 ...
