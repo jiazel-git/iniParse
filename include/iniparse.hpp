@@ -103,7 +103,7 @@ public:
     bool empty() const {
         return data_continaer_.empty();
     }
-    bool size() const {
+    std::size_t size() const {
         return data_continaer_.size();
     }
     std::size_t set_empty( const std::string& key ) {
@@ -149,6 +149,7 @@ public:
 private:
     data_index_map data_index_map_;
     data_continaer data_continaer_;
+    iterator       cur_;
 };
 using ini_structure = ini_map< ini_map< std::string > >;
 class ini_reader {
@@ -167,14 +168,12 @@ public:
             if ( ini_utilty::parse_line( line, item ) == ini_utilty::data_type::data_session ) {
                 in_session = true;
                 ini[ session = item.first ];
-                std::cout << item.first << " " << item.second << std::endl;
                 continue;
             }
             if ( in_session && ini_utilty::parse_line( line, item ) == ini_utilty::data_type::data_keyvalue ) {
                 auto key              = item.first;
                 auto value            = item.second;
                 ini[ session ][ key ] = value;
-                std::cout << item.first << " " << item.second << std::endl;
                 continue;
             }
         }
